@@ -7,13 +7,30 @@ React frontend
 - current approved document
 - newest user message
 
-        ↓
 
-Cloudflare server-side endpoint
+React request
 
-        ↓
+↓
 
-OpenAI API
+Cloudflare reads the request body
+
+↓
+
+Cloudflare sends the context to OpenAI
+
+↓
+
+OpenAI generates the next response
+
+↓
+
+Cloudflare wraps it in our AssistantResponse shape
+
+↓
+
+React displays it
+
+
 
 
 

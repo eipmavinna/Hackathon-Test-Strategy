@@ -100,6 +100,7 @@ Do not assume important details that the user has not provided.`
   const [conversation, setConversation] = useState<ChatMessage[]>([]); //array of all messages sent
   const [currentDocument, setCurrentDocument] = useState(""); //current accepted document
   const [suggestedDocument, setSuggestedDocument] = useState(""); //ai suggested changes to the doc
+  const [isLoading, setIsLoading] = useState(false);
 
   const selectedRuleSet = genreRuleSets.find(   //for the hackathon, this would be the specific AI generated ruleset for the document type. These will be tested.
     (ruleSet) => ruleSet.genre === selectedGenre
@@ -182,34 +183,39 @@ Do not assume important details that the user has not provided.`
       newestUserMessage: trimmedMessage,
     };
 
+    setIsLoading(true);
+    try {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(requestToSend),
+      });
 
-    const response = await fetch("/api/generate", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify(requestToSend),
-    });
+      const assistantResponse: AssistantResponse =
+        await response.json();
 
-    const assistantResponse: AssistantResponse =
-      await response.json();
+      if (assistantResponse.suggestedDocument !== "") {
+        setSuggestedDocument(
+          assistantResponse.suggestedDocument
+        );
+      }
 
-    if (assistantResponse.suggestedDocument !== "") {
-      setSuggestedDocument(
-        assistantResponse.suggestedDocument
-      );
+      setConversation([
+        ...conversation,
+        {
+          role: "user",
+          content: trimmedMessage,
+        },
+        assistantResponse.message,
+      ]);
+
+      setUserMessage("");
+    } finally {
+      setIsLoading(false);
     }
 
-    setConversation([
-      ...conversation,
-      {
-        role: "user",
-        content: trimmedMessage,
-      },
-      assistantResponse.message,
-    ]);
-
-    setUserMessage("");
   }
 
   return (
@@ -366,10 +372,11 @@ Do not assume important details that the user has not provided.`
           onClick={handleSendMessage}
           disabled={
             selectedGenre === "" ||
-            userMessage.trim() === ""
+            userMessage.trim() === "" ||
+            isLoading
           }
         >
-          Send
+          {isLoading ? "Thinking..." : "Send"}
         </button>
       </section>
 
