@@ -139,9 +139,27 @@ ${requestData.newestUserMessage}
 
 RESPONSE BEHAVIOR
 
-If you still need information, put your next question in "message" and return an empty string for "suggestedDocument".
+Return "ask-question" when more information is needed.
 
-If you have enough information to create or revise the design, put a brief explanation in "message" and put the complete proposed design in "suggestedDocument".
+For "ask-question":
+- Put the next question in "message".
+- Return an empty string for "suggestedDocument".
+- Ask one focused question at a time.
+
+Return "suggest-document" when enough information is available to create or revise the escape-room design.
+
+For "suggest-document":
+- Put all conversational text in "message".
+- This includes explanations, questions, offers for additional work, suggested next steps, and requests for user feedback.
+- Put only the escape-room design document in "suggestedDocument".
+- Do not include conversational introductions or follow-up questions inside "suggestedDocument".
+- The suggested document should end when the actual design document ends.
+
+Return "explain-concern" when you identify a problem that should be discussed before revising the document.
+
+For "explain-concern":
+- Explain the concern in "message".
+- Return an empty string for "suggestedDocument" unless you are also proposing a complete revised document.
         `,
             }),
         }
