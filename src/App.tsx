@@ -8,7 +8,13 @@ type ChatMessage = {
 };
 //response from the AI
 type AssistantResponse = {
+  action:
+    | "ask-question"
+    | "suggest-document"
+    | "explain-concern";
+
   message: ChatMessage;
+
   suggestedDocument: string;
 };
 //to send to the AI
@@ -19,66 +25,11 @@ type AiRequest = {
   examples: EscapeRoomExample[];
   conversationHistory: ChatMessage[];
   currentDocument: string;
+  suggestedDocument: string;
   newestUserMessage: string;
 };
 
 
-
-function getFakeAssistantResponse(
-  request: AiRequest,
-  selectedGenre: string
-): AssistantResponse {
-  const genreQuestion =   //In the hackathon, this will ask something like department
-    selectedGenre === "mystery"
-      ? "What kind of mystery should the players investigate?"
-      : selectedGenre === "science-fiction"
-        ? "What science-fiction setting would you like?"
-        : "What subject or learning objective should the escape room teach?";
-  const userMessageCount =
-    request.conversationHistory.filter(
-      (message) => message.role === "user"
-    ).length;
-
-  if (userMessageCount === 0) {
-    return {
-      message: {
-        role: "assistant",
-        content: genreQuestion,
-      },
-      suggestedDocument: "",
-    };
-  }
-
-  if (userMessageCount === 1) {
-    return {
-      message: {
-        role: "assistant",
-        content:
-          "About how long should the escape room take to complete?",
-      },
-      suggestedDocument: "",
-    };
-  }
-
-  return {
-    message: {
-      role: "assistant",
-      content:
-        "I have enough information to suggest an initial design.",
-    },
-    suggestedDocument: `Premise
-
-A digital escape room based on the selected genre.
-
-Player Objective
-
-Solve a sequence of connected puzzles and complete the final challenge.
-
-Designer Notes
-
-This is a temporary fake design used to test the interface.`,
-  };
-}
 
 function App() {
   const [selectedGenre, setSelectedGenre] = useState("");
@@ -94,13 +45,21 @@ Ask useful follow-up questions before creating a full design.
 
 Use the selected genre rules and approved examples as guidance.
 
-Do not assume important details that the user has not provided.`
+Do not assume important details that the user has not provided.
+
+Do not ask all your questions at once. Ask one question at a time and wait for the user's response.
+`
   ); //these rules tell the AI how to behave. The user can edit these rules to change the AI's behavior.
   const [userMessage, setUserMessage] = useState(""); //holds current user message
   const [conversation, setConversation] = useState<ChatMessage[]>([]); //array of all messages sent
   const [currentDocument, setCurrentDocument] = useState(""); //current accepted document
   const [suggestedDocument, setSuggestedDocument] = useState(""); //ai suggested changes to the doc
   const [isLoading, setIsLoading] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [comparisonExampleId, setComparisonExampleId] =
+    useState("");
+  const [evaluationNotes, setEvaluationNotes] =
+    useState("");
 
   const selectedRuleSet = genreRuleSets.find(   //for the hackathon, this would be the specific AI generated ruleset for the document type. These will be tested.
     (ruleSet) => ruleSet.genre === selectedGenre
@@ -110,7 +69,7 @@ Do not assume important details that the user has not provided.`
   );
 
   //deletes the last assistant message and resends the last user message to the AI for a new response
-  function retryLastAssistantStep() {
+  async function retryLastAssistantStep() {
     const lastMessage = conversation[conversation.length - 1];
 
     if (lastMessage?.role !== "assistant") {
@@ -138,20 +97,48 @@ Do not assume important details that the user has not provided.`
       newestUserMessage: lastUserMessage.content,
     };
 
-    const fakeAssistantResponse =
-      getFakeAssistantResponse(
-        retryRequest,
-        selectedGenre
+    setIsLoading(true);
+    setErrorMessage("");
+
+    try {
+      const response = await fetch("/api/generate", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(retryRequest),
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+
+        throw new Error(
+          errorData.error ?? "The retry request failed."
+        );
+      }
+
+      const assistantResponse: AssistantResponse =
+        await response.json();
+
+      setConversation([
+        ...conversationWithoutLastAssistant,
+        assistantResponse.message,
+      ]);
+
+      setSuggestedDocument(
+        assistantResponse.suggestedDocument
       );
-
-    setConversation([
-      ...conversationWithoutLastAssistant,
-      fakeAssistantResponse.message,
-    ]);
-
-    setSuggestedDocument(
-      fakeAssistantResponse.suggestedDocument
-    );
+    } catch (error) {
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage(
+          "An unexpected error occurred."
+        );
+      }
+    } finally {
+      setIsLoading(false);
+    }
   }
 
   //for context preview
@@ -167,6 +154,7 @@ Do not assume important details that the user has not provided.`
     examples: examplesToSend,                     //example documents to send as context
     conversationHistory: conversation,            //conversation history
     currentDocument,                              //current accepted document
+    suggestedDocument,                            //AI suggested changes to the document
     newestUserMessage: "",
   };
 
@@ -183,6 +171,7 @@ Do not assume important details that the user has not provided.`
       newestUserMessage: trimmedMessage,
     };
 
+    setErrorMessage("");
     setIsLoading(true);
     try {
       const response = await fetch("/api/generate", {
@@ -193,14 +182,21 @@ Do not assume important details that the user has not provided.`
         body: JSON.stringify(requestToSend),
       });
 
+      //error handling
+      if (!response.ok) {
+        const errorData = await response.json();
+
+        throw new Error(
+          errorData.error ?? "The AI request failed."
+        );
+      }
+
       const assistantResponse: AssistantResponse =
         await response.json();
 
-      if (assistantResponse.suggestedDocument !== "") {
-        setSuggestedDocument(
-          assistantResponse.suggestedDocument
-        );
-      }
+      setSuggestedDocument(
+        assistantResponse.suggestedDocument
+      );
 
       setConversation([
         ...conversation,
@@ -212,11 +208,26 @@ Do not assume important details that the user has not provided.`
       ]);
 
       setUserMessage("");
+    } catch (error) {
+      if (error instanceof Error) {
+        setErrorMessage(error.message);
+      } else {
+        setErrorMessage("An unexpected error occurred.");
+      }
     } finally {
       setIsLoading(false);
     }
 
   }
+
+  const comparisonExample = selectedExamples.find(
+    (example) => example.id === comparisonExampleId
+  );
+
+  const documentForEvaluation =
+    suggestedDocument !== ""
+      ? suggestedDocument
+      : currentDocument;
 
   return (
     <main>
@@ -232,12 +243,19 @@ Do not assume important details that the user has not provided.`
           const newGenre = event.target.value;
 
           setSelectedGenre(newGenre);
-          setSelectedExampleIds([]);
+          const matchingExamples = escapeRoomExamples.filter(
+            (example) => example.genre === newGenre
+          );
+
+          setSelectedExampleIds(
+            matchingExamples.map((example) => example.id)
+          );
 
           setConversation([]);
           setUserMessage("");
           setCurrentDocument("");
           setSuggestedDocument("");
+          setComparisonExampleId("");
 
           const matchingRuleSet = genreRuleSets.find(
             (ruleSet) => ruleSet.genre === newGenre
@@ -283,6 +301,10 @@ Do not assume important details that the user has not provided.`
                           ...selectedExampleIds,
                           example.id,
                         ]);
+
+                        if (comparisonExampleId === example.id) {
+                          setComparisonExampleId("");
+                        }
                       } else {
                         setSelectedExampleIds(
                           selectedExampleIds.filter(
@@ -300,6 +322,41 @@ Do not assume important details that the user has not provided.`
           </ul>
         </section>
       )}
+
+
+      {/*shows the document meant for comparison - used when excluded and trying to reach that document. Select a document that is not checked.*/}
+      <label htmlFor="comparison-example">
+        Comparison document
+      </label>
+
+      <select
+        id="comparison-example"
+        value={comparisonExampleId}
+        onChange={(event) =>
+          setComparisonExampleId(event.target.value)
+        }
+      >
+        <option value="">
+          Select a document for comparison
+        </option>
+
+        {selectedExamples
+          .filter(
+            (example) =>
+              !selectedExampleIds.includes(example.id)
+          )
+          .map((example) => (
+            <option
+              key={example.id}
+              value={example.id}
+            >
+              {example.title}
+            </option>
+          ))}
+      </select>
+
+
+
 
       {/*AI instructions textarea for changing the instructions*/}
       <section>
@@ -341,6 +398,53 @@ Do not assume important details that the user has not provided.`
         />
       </section>
 
+      <section>
+        <h2>Evaluation</h2>
+
+        <div
+          style={{
+            display: "flex",
+            gap: "1rem",
+            alignItems: "flex-start",
+            flexWrap: "wrap",
+          }}
+        >
+          <div style={{ flex: "1 1 400px" }}>
+            <h3>Generated Design</h3>
+
+            <textarea
+              value={documentForEvaluation}
+              readOnly
+              rows={25}
+              style={{ width: "100%" }}
+            />
+          </div>
+
+          <div style={{ flex: "1 1 400px" }}>
+            <h3>Comparison Document</h3>
+
+            <textarea
+              value={comparisonExample?.content ?? ""}
+              readOnly
+              rows={25}
+              style={{ width: "100%" }}
+            />
+          </div>
+        </div>
+      </section>
+      {comparisonExample && (
+        <section>
+          <h2>Comparison Document</h2>
+
+          <textarea
+            value={comparisonExample.content}
+            readOnly
+            rows={20}
+            style={{ width: "100%", maxWidth: "900px" }}
+          />
+        </section>
+      )}
+
 
       <section>
         <h2>Conversation</h2>
@@ -362,6 +466,7 @@ Do not assume important details that the user has not provided.`
           onChange={(event) => setUserMessage(event.target.value)}
           rows={4}
           style={{ width: "100%", maxWidth: "900px" }}
+          disabled={isLoading || selectedGenre === ""}
           placeholder="Describe the digital escape room you want to create."
         />
 
@@ -378,7 +483,15 @@ Do not assume important details that the user has not provided.`
         >
           {isLoading ? "Thinking..." : "Send"}
         </button>
+
+
+        {errorMessage !== "" && (
+          <p>{errorMessage}</p>
+        )}
+
       </section>
+
+
 
       {/*displays the current approved design and the AI suggested design*/}
       <section>
@@ -447,6 +560,40 @@ Do not assume important details that the user has not provided.`
       >
         Restart Workflow
       </button>
+
+
+      
+      <section>
+        <h2>Evaluation Notes</h2>
+
+        <textarea
+          value={evaluationNotes}
+          onChange={(event) =>
+            setEvaluationNotes(event.target.value)
+          }
+          rows={10}
+          style={{
+            width: "100%",
+            maxWidth: "900px",
+          }}
+          placeholder="What did the assistant miss? What questions should it have asked? What should change in the prompt?"
+        />
+
+        <br />
+
+        <button
+          onClick={() => {
+            navigator.clipboard.writeText(
+              evaluationNotes
+            );
+          }}
+          disabled={
+            evaluationNotes.trim() === ""
+          }
+        >
+          Copy Notes
+        </button>
+      </section>
 
 
 

@@ -46,3 +46,4 @@ http://localhost:8788
 Qs for the end:
 - write a prompt for claude explaining what everything in the repo is 
 - how would I switch this away from Cloudflare
+- is there a way for copilot to keep the context so we don't have to send back and forth each time
