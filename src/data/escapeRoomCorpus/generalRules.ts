@@ -16,4 +16,4 @@ export const generalDigitalEscapeRoomRules: string[] = [
   "Do not require specialized background knowledge unless it is appropriate for the stated audience and identified in advance.",
   "Prefer accessible interaction patterns. Do not rely on color alone, audio alone, or very precise pointer movement to communicate required information.",
   "State a clear completion condition so players know when they have succeeded."
-];
+];  //tells what a successful digital escape room should include. These are the general rules that apply to all digital escape rooms, regardless of genre or theme.

@@ -1,0 +1,16 @@
+React frontend
+- editable instructions
+- general rules
+- genre-specific rules
+- selected examples
+- conversation history
+- current approved document
+- newest user message
+
+        ↓
+
+Cloudflare server-side endpoint
+
+        ↓
+
+OpenAI API
