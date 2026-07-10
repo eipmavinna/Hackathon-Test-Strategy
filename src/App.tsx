@@ -170,7 +170,7 @@ Do not assume important details that the user has not provided.`
   };
 
   //when send button is clicked, sends user message to AI and saves the response to the conversation array
-  function handleSendMessage() {
+  async function handleSendMessage() {
     const trimmedMessage = userMessage.trim();
 
     if (trimmedMessage === "" || selectedGenre === "") {
@@ -183,15 +183,20 @@ Do not assume important details that the user has not provided.`
     };
 
 
-    const fakeAssistantResponse =
-      getFakeAssistantResponse(
-        requestToSend,
-        selectedGenre
-      );
+    const response = await fetch("/api/generate", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify(requestToSend),
+    });
 
-    if (fakeAssistantResponse.suggestedDocument !== "") {
+    const assistantResponse: AssistantResponse =
+      await response.json();
+
+    if (assistantResponse.suggestedDocument !== "") {
       setSuggestedDocument(
-        fakeAssistantResponse.suggestedDocument
+        assistantResponse.suggestedDocument
       );
     }
 
@@ -201,7 +206,7 @@ Do not assume important details that the user has not provided.`
         role: "user",
         content: trimmedMessage,
       },
-      fakeAssistantResponse.message,
+      assistantResponse.message,
     ]);
 
     setUserMessage("");

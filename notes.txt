@@ -14,3 +14,18 @@ Cloudflare server-side endpoint
         ↓
 
 OpenAI API
+
+
+
+npm install -D @cloudflare/workers-types
+
+
+Running together locally:
+npm run build
+npx wrangler pages dev dist
+http://localhost:8788
+
+
+Qs for the end:
+- write a prompt for claude explaining what everything in the repo is 
+- how would I switch this away from Cloudflare
